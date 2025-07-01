@@ -5,7 +5,7 @@ export default function Todo({ todo, handleToggle, handleDelete, isEditing, edit
                 <div className="flex items-center gap-3">
                     <input
                         type="checkbox"
-                        checked={todo.isCompleted}
+                        checked={todo.completed}
                         onChange={handleToggle}
                         className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                     />
@@ -18,7 +18,7 @@ export default function Todo({ todo, handleToggle, handleDelete, isEditing, edit
                         onClick={handleStartEdit}
                         onKeyDown={handleOnKeyDown}
                         className={`bg-transparent border-none focus:outline-none text-lg w-[25rem]
-                            ${todo.isCompleted ? 'line-through text-gray-400' : 'text-gray-800'}`}
+                            ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}
                     />
                 </div>
 

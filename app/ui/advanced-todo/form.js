@@ -2,30 +2,33 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Todo from "./todo";
+import { createTodo, deleteCompletedTodos, deleteTodo, updateTodo } from "@/app/lib/actions";
 
 
-export default function Form() {
+export default function Form({ GetAllTodos }) {
     const [input, setInput] = useState("");
     const [error, setError] = useState(null);
-    const [todos, setTodos] = useState([]);
+    const [todos, setTodos] = useState(GetAllTodos || []);
     const [editingId, setEditingId] = useState(null);
     const [editText, setEditText] = useState("");
     const [filterValue, setFilterValue] = useState('all');
     const [term, setTerm] = useState('');
     const [debounceTerm, setDebounceTerm] = useState('');
 
-    function handleSubmit(e) {
+    async function handleSubmit(e) {
+
         e.preventDefault();
         const trimmedInput = input.trim();
-
+        await createTodo(trimmedInput);
         if (trimmedInput.length > 0) {
             setTodos((prev) => [
                 ...prev,
-                { id: prev.length + 1, text: trimmedInput, isCompleted: false }
+                { id: prev.length + 1, text: trimmedInput, completed: false }
             ]);
             setInput("");
             setError(null);
             localStorage.setItem()
+
         } else {
             setError("Please enter a valid task.");
         }
@@ -40,15 +43,22 @@ export default function Form() {
         setEditText(e.target.value);
     }
 
-    function handleToggle(id) {
+    async function handleToggle(id) {
+        const todo = todos.find(t => t.id === id);
+        if (!todo) return;
+
+        const newCompleted = !todo.completed;
+        await updateTodo(id, null, newCompleted);
+
         setTodos((prev) =>
             prev.map((item) =>
-                item.id === id ? { ...item, isCompleted: !item.isCompleted } : item
+                item.id === id ? { ...item, completed: !item.completed } : item
             )
         )
     }
 
-    function handleDelete(id) {
+    async function handleDelete(id) {
+        await deleteTodo(id);
         const updatedTodos = todos?.filter((todo) => todo.id !== id);
         setTodos(updatedTodos);
     }
@@ -65,7 +75,8 @@ export default function Form() {
         setEditText("");
     }
 
-    function handleEditSave() {
+    async function handleEditSave() {
+        await updateTodo(editingId, editText, null);
         setTodos((prev) => (
             prev.map((todo) =>
                 todo.id === editingId ? { ...todo, text: editText } : todo
@@ -88,17 +99,17 @@ export default function Form() {
 
         switch (filterValue) {
             case 'active':
-                filtered = todos?.filter((item) => !item.isCompleted);
+                filtered = todos?.filter((item) => !item.completed);
                 break;
             case 'completed':
-                filtered = todos?.filter((item) => item.isCompleted);
+                filtered = todos?.filter((item) => item.completed);
                 break;
             default:
                 filtered = todos;
         }
 
         if (term) {
-            filtered = filtered?.filter((todo) => todo?.text?.toLowercase().includes(term?.toLowerCase()));
+            filtered = filtered?.filter((todo) => todo?.text?.toLowerCase().includes(term?.toLowerCase()));
         }
 
         return filtered;
@@ -107,8 +118,9 @@ export default function Form() {
 
     const displayedTodos = handleSearchAndFilter();
 
-    function handleClearCompleted() {
-        let updatedTodos = todos?.filter((todo) => todo.isCompleted === false);
+    async function handleClearCompleted() {
+        await deleteCompletedTodos();
+        let updatedTodos = todos?.filter((todo) => todo.completed === false);
         setTodos(updatedTodos)
     }
 
@@ -120,23 +132,6 @@ export default function Form() {
         return () => clearTimeout(timer);
     }, [term]);
 
-
-    useEffect(() => {
-        // Save to localStorage
-        localStorage.setItem("todos", JSON.stringify(todos));
-        localStorage.setItem("filterValue", JSON.stringify(filterValue));
-    }, [todos, filterValue]);
-
-    useEffect(() => {
-        //retrive from localStorage
-        const storedTodos = localStorage.getItem("todos");
-        const parseTodos = storedTodos ? JSON.parse(storedTodos) : [];
-        setTodos(parseTodos);
-
-        const storedFilterValue = localStorage.getItem("filterValue");
-        const parseFilterValue = storedTodos ? JSON.parse(storedFilterValue) : [];
-        setFilterValue(parseFilterValue);
-    }, []);
 
 
     return (
@@ -168,7 +163,6 @@ export default function Form() {
                 <select
                     id="filter"
                     name="filter"
-                    defaultValue=""
                     value={filterValue}
                     onChange={(e) => setFilterValue(e.target.value)}
                     className="p-2 bg-gray-50 shadow-md rounded-md"
@@ -199,12 +193,14 @@ export default function Form() {
                     <p>No Tasks Found</p>
                 )}
             </div>
-            {todos?.map((item) => item.isCompleted.length > 0) && <button
-                onClick={handleClearCompleted}
-                className="px-3 py-1.5 bg-gray-300 text-black rounded transition duration-200 text-sm cursor-pointer"
-            >
-                Clear Completed
-            </button>}
+            {todos?.some((todo) => todo.completed) &&
+                < button
+                    onClick={handleClearCompleted}
+                    className="px-3 py-1.5 bg-gray-300 text-black rounded transition duration-200 text-sm cursor-pointer"
+                >
+                    Clear Completed
+                </button >
+            }
         </>
     )
 };
