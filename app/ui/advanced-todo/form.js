@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import Todo from "./todo";
 import { createTodo, deleteCompletedTodos, deleteTodo, updateTodo } from "@/app/lib/actions";
 
-
 export default function Form({ GetAllTodos }) {
     const [input, setInput] = useState("");
     const [error, setError] = useState(null);
@@ -14,28 +13,34 @@ export default function Form({ GetAllTodos }) {
     const [filterValue, setFilterValue] = useState('all');
     const [term, setTerm] = useState('');
     const [debounceTerm, setDebounceTerm] = useState('');
+    
+    // History for undo (stores last 3 actions)
+    const [history, setHistory] = useState([]);
 
     async function handleSubmit(e) {
-
         e.preventDefault();
         const trimmedInput = input.trim();
-        await createTodo(trimmedInput);
-        if (trimmedInput.length > 0) {
+
+        if (trimmedInput.length === 0) {
+            setError("Please enter a valid task.");
+            return;
+        }
+
+        try {
+            await createTodo(trimmedInput);
             setTodos((prev) => [
                 ...prev,
                 { id: prev.length + 1, text: trimmedInput, completed: false }
             ]);
             setInput("");
             setError(null);
-            localStorage.setItem()
-
-        } else {
-            setError("Please enter a valid task.");
+        } catch (err) {
+            setError("Failed to create todo.");
         }
     }
 
     function handleChange(e) {
-        setError(null)
+        setError(null);
         setInput(e.target.value);
     }
 
@@ -43,24 +48,48 @@ export default function Form({ GetAllTodos }) {
         setEditText(e.target.value);
     }
 
+    // Save action to history, keep max 3
+    function pushToHistory(action) {
+        setHistory((prev) => {
+            const newHistory = [action, ...prev];
+            return newHistory.slice(0, 3);
+        });
+    }
+
     async function handleToggle(id) {
         const todo = todos.find(t => t.id === id);
         if (!todo) return;
 
         const newCompleted = !todo.completed;
-        await updateTodo(id, null, newCompleted);
 
-        setTodos((prev) =>
-            prev.map((item) =>
-                item.id === id ? { ...item, completed: !item.completed } : item
-            )
-        )
+        // Save undo snapshot before change
+        pushToHistory({ type: "TOGGLE", task: { ...todo } });
+
+        try {
+            await updateTodo(id, null, newCompleted);
+            setTodos((prev) =>
+                prev.map((item) =>
+                    item.id === id ? { ...item, completed: newCompleted } : item
+                )
+            );
+        } catch {
+            setError("Failed to update todo.");
+        }
     }
 
     async function handleDelete(id) {
-        await deleteTodo(id);
-        const updatedTodos = todos?.filter((todo) => todo.id !== id);
-        setTodos(updatedTodos);
+        const todoToDelete = todos.find(t => t.id === id);
+        if (!todoToDelete) return;
+
+        // Save undo snapshot before delete
+        pushToHistory({ type: "DELETE", task: todoToDelete });
+
+        try {
+            await deleteTodo(id);
+            setTodos((prev) => prev.filter((todo) => todo.id !== id));
+        } catch {
+            setError("Failed to delete todo.");
+        }
     }
 
     function handleStartEdit(todo) {
@@ -76,21 +105,31 @@ export default function Form({ GetAllTodos }) {
     }
 
     async function handleEditSave() {
-        await updateTodo(editingId, editText, null);
-        setTodos((prev) => (
-            prev.map((todo) =>
-                todo.id === editingId ? { ...todo, text: editText } : todo
-            )
-        ))
-        setEditingId(null);
-        setEditText("")
+        const todoToEdit = todos.find(t => t.id === editingId);
+        if (!todoToEdit) return;
+
+        // Save undo snapshot before edit
+        pushToHistory({ type: "EDIT", task: { ...todoToEdit } });
+
+        try {
+            await updateTodo(editingId, editText, null);
+            setTodos((prev) =>
+                prev.map((todo) =>
+                    todo.id === editingId ? { ...todo, text: editText } : todo
+                )
+            );
+            setEditingId(null);
+            setEditText("");
+        } catch {
+            setError("Failed to update todo.");
+        }
     }
 
     function handleOnKeyDown(e) {
         if (e.key === 'Enter') {
             handleEditSave();
         } else if (e.key === 'Escape') {
-            handleCancelEdit()
+            handleCancelEdit();
         }
     }
 
@@ -119,9 +158,54 @@ export default function Form({ GetAllTodos }) {
     const displayedTodos = handleSearchAndFilter();
 
     async function handleClearCompleted() {
-        await deleteCompletedTodos();
-        let updatedTodos = todos?.filter((todo) => todo.completed === false);
-        setTodos(updatedTodos)
+        try {
+            await deleteCompletedTodos();
+            setTodos((prev) => prev.filter((todo) => !todo.completed));
+        } catch {
+            setError("Failed to clear completed todos.");
+        }
+    }
+
+    // Undo the last action
+    async function handleUndo() {
+        if (history.length === 0) return;
+
+        const lastAction = history[0];
+        setHistory((prev) => prev.slice(1)); // remove last action from history
+
+        if (lastAction.type === "DELETE") {
+            // Undo delete = re-add todo
+            try {
+                await createTodo(lastAction.task.text);
+                setTodos((prev) => [...prev, lastAction.task]);
+            } catch {
+                setError("Failed to undo delete.");
+            }
+        } else if (lastAction.type === "TOGGLE") {
+            // Undo toggle = revert completed status
+            try {
+                await updateTodo(lastAction.task.id, null, lastAction.task.completed);
+                setTodos((prev) =>
+                    prev.map((todo) =>
+                        todo.id === lastAction.task.id ? { ...todo, completed: lastAction.task.completed } : todo
+                    )
+                );
+            } catch {
+                setError("Failed to undo toggle.");
+            }
+        } else if (lastAction.type === "EDIT") {
+            // Undo edit = revert text
+            try {
+                await updateTodo(lastAction.task.id, lastAction.task.text, null);
+                setTodos((prev) =>
+                    prev.map((todo) =>
+                        todo.id === lastAction.task.id ? { ...todo, text: lastAction.task.text } : todo
+                    )
+                );
+            } catch {
+                setError("Failed to undo edit.");
+            }
+        }
     }
 
     useEffect(() => {
@@ -131,8 +215,6 @@ export default function Form({ GetAllTodos }) {
 
         return () => clearTimeout(timer);
     }, [term]);
-
-
 
     return (
         <>
@@ -152,6 +234,18 @@ export default function Form({ GetAllTodos }) {
                 </div>
                 {error && <p className="text-red-500">{error}</p>}
             </form>
+
+            {/* Undo Button */}
+            <div className="my-3">
+                <button
+                    disabled={history.length === 0}
+                    onClick={handleUndo}
+                    className={`px-4 py-2 rounded bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50`}
+                >
+                    Undo
+                </button>
+            </div>
+
             <div className="flex justify-between w-full">
                 <input
                     type="text"
@@ -194,13 +288,13 @@ export default function Form({ GetAllTodos }) {
                 )}
             </div>
             {todos?.some((todo) => todo.completed) &&
-                < button
+                <button
                     onClick={handleClearCompleted}
                     className="px-3 py-1.5 bg-gray-300 text-black rounded transition duration-200 text-sm cursor-pointer"
                 >
                     Clear Completed
-                </button >
+                </button>
             }
         </>
-    )
-};
+    );
+}
