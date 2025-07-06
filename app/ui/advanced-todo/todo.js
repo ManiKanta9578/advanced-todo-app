@@ -26,6 +26,7 @@ export default function Todo({ todo, handleToggle, handleDelete, isEditing, edit
                     {!isEditing &&
                         <button
                             onClick={handleDelete}
+                            aria-label="Delete Todo"
                             className="px-3 py-1.5 bg-gray-300 text-black rounded hover:bg-red-500 hover:text-white transition duration-200 text-sm cursor-pointer">
                             Delete
                         </button>

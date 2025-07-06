@@ -218,21 +218,26 @@ export default function Form({ GetAllTodos }) {
 
     return (
         <>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} role="form" aria-label="Add New ToDo">
                 <div className="flex">
+                    <label htmlFor="todo-input" className="sr-only"> Add a new task </label>
                     <input
                         type="text"
                         value={input}
                         onChange={handleChange}
                         placeholder="Add a new task..."
+                        aria-describedby={error ? "error-message" : ""}
+                        aria-invalid={error ? "true" : "false"}
                         className={`border rounded-l-full p-3 w-xl ${error ? 'border-red-400' : 'border-gray-300'}`}
                     />
 
-                    <button type="submit" className="rounded-r-full bg-blue-500 p-3 cursor-pointer">
+                    <button type="submit" className="rounded-r-full bg-blue-500 p-3 cursor-pointer" aria-label="Add Task">
                         ADD
                     </button>
                 </div>
-                {error && <p className="text-red-500">{error}</p>}
+                {error && (
+                    <p id="error-message" className="text-red-500" role="alert" aria-live="polite" > {error} </p>
+                )}
             </form>
 
             {/* Undo Button */}
@@ -240,6 +245,7 @@ export default function Form({ GetAllTodos }) {
                 <button
                     disabled={history.length === 0}
                     onClick={handleUndo}
+                    aria-label="Undo Task"
                     className={`px-4 py-2 rounded bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50`}
                 >
                     Undo
@@ -247,13 +253,16 @@ export default function Form({ GetAllTodos }) {
             </div>
 
             <div className="flex justify-between w-full">
+                <label htmlFor="search-input" className="sr-only"> Search todos </label>
                 <input
                     type="text"
                     placeholder="Search.."
                     value={term || ""}
                     onChange={(e) => setTerm(e.target.value)}
                     className="p-2 w-[25rem] bg-gray-50 shadow-md rounded-md"
+                    aria-label="Search todos"
                 />
+                <label htmlFor="filter-select" className="sr-only"> Filter todos </label>
                 <select
                     id="filter"
                     name="filter"
