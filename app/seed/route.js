@@ -28,7 +28,7 @@ async function createTodosTable() {
 export async function GET() {
     try {
       await sql.begin(() => [
-        // createTodosTable(),
+        createTodosTable(),
       ]);
   
       return Response.json({ message: 'Database seeded successfully' });

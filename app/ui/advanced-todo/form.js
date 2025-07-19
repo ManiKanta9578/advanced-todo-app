@@ -3,17 +3,24 @@
 import { useCallback, useEffect, useState } from "react";
 import Todo from "./todo";
 import { createTodo, deleteCompletedTodos, deleteTodo, updateTodo } from "@/app/lib/actions";
+import { Search, Plus, Undo, Filter } from "lucide-react";
 
 export default function Form({ GetAllTodos }) {
     const [input, setInput] = useState("");
     const [error, setError] = useState(null);
-    const [todos, setTodos] = useState(GetAllTodos || []);
+    const [todos, setTodos] = useState(GetAllTodos || [
+        { id: 1, text: "Welcome to your modern todo app!", completed: false },
+        { id: 2, text: "Click on a task to edit it", completed: false },
+        { id: 3, text: "Check this completed task", completed: true }
+    ]);
     const [editingId, setEditingId] = useState(null);
     const [editText, setEditText] = useState("");
     const [filterValue, setFilterValue] = useState('all');
     const [term, setTerm] = useState('');
     const [debounceTerm, setDebounceTerm] = useState('');
-    
+    const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+
     // History for undo (stores last 3 actions)
     const [history, setHistory] = useState([]);
 
@@ -27,10 +34,10 @@ export default function Form({ GetAllTodos }) {
         }
 
         try {
-            await createTodo(trimmedInput);
+            const newTodo = await createTodo(trimmedInput);
             setTodos((prev) => [
-                ...prev,
-                { id: prev.length + 1, text: trimmedInput, completed: false }
+                { id: Date.now(), text: trimmedInput, completed: false },
+                ...prev
             ]);
             setInput("");
             setError(null);
@@ -147,8 +154,8 @@ export default function Form({ GetAllTodos }) {
                 filtered = todos;
         }
 
-        if (term) {
-            filtered = filtered?.filter((todo) => todo?.text?.toLowerCase().includes(term?.toLowerCase()));
+        if (debounceTerm) {
+            filtered = filtered?.filter((todo) => todo?.text?.toLowerCase().includes(debounceTerm?.toLowerCase()));
         }
 
         return filtered;
@@ -177,7 +184,7 @@ export default function Form({ GetAllTodos }) {
             // Undo delete = re-add todo
             try {
                 await createTodo(lastAction.task.text);
-                setTodos((prev) => [...prev, lastAction.task]);
+                setTodos((prev) => [lastAction.task, ...prev]);
             } catch {
                 setError("Failed to undo delete.");
             }
@@ -216,69 +223,108 @@ export default function Form({ GetAllTodos }) {
         return () => clearTimeout(timer);
     }, [term]);
 
+    const completedCount = todos.filter(todo => todo.completed).length;
+    const activeCount = todos.filter(todo => !todo.completed).length;
+
     return (
-        <>
-            <form onSubmit={handleSubmit} role="form" aria-label="Add New ToDo">
-                <div className="flex">
-                    <label htmlFor="todo-input" className="sr-only"> Add a new task </label>
-                    <input
-                        type="text"
-                        value={input}
-                        onChange={handleChange}
-                        placeholder="Add a new task..."
-                        aria-describedby={error ? "error-message" : ""}
-                        aria-invalid={error ? "true" : "false"}
-                        className={`border rounded-l-full p-3 w-xl ${error ? 'border-red-400' : 'border-gray-300'}`}
-                    />
-
-                    <button type="submit" className="rounded-r-full bg-blue-500 p-3 cursor-pointer" aria-label="Add Task">
-                        ADD
-                    </button>
-                </div>
-                {error && (
-                    <p id="error-message" className="text-red-500" role="alert" aria-live="polite" > {error} </p>
-                )}
-            </form>
-
-            {/* Undo Button */}
-            <div className="my-3">
-                <button
-                    disabled={history.length === 0}
-                    onClick={handleUndo}
-                    aria-label="Undo Task"
-                    className={`px-4 py-2 rounded bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50`}
-                >
-                    Undo
-                </button>
-            </div>
-
-            <div className="flex justify-between w-full">
-                <label htmlFor="search-input" className="sr-only"> Search todos </label>
+        <div className="space-y-6">
+            {/* Add Todo Form */}
+            <form onSubmit={handleSubmit} className="flex gap-2">
                 <input
                     type="text"
-                    placeholder="Search.."
-                    value={term || ""}
-                    onChange={(e) => setTerm(e.target.value)}
-                    className="p-2 w-[25rem] bg-gray-50 shadow-md rounded-md"
-                    aria-label="Search todos"
+                    value={input}
+                    onChange={handleChange}
+                    placeholder="Add a new task..."
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-                <label htmlFor="filter-select" className="sr-only"> Filter todos </label>
-                <select
-                    id="filter"
-                    name="filter"
-                    value={filterValue}
-                    onChange={(e) => setFilterValue(e.target.value)}
-                    className="p-2 bg-gray-50 shadow-md rounded-md"
+                <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
-                    <option value='all'>All</option>
-                    <option value='active'>Active</option>
-                    <option value='completed'>Completed</option>
-                </select>
+                    <Plus className="w-5 h-5" />
+                </button>
+            </form>
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-white p-3 rounded-lg shadow-sm">
+                    <div className="font-bold">{todos.length}</div>
+                    <div className="text-sm text-gray-500">Total</div>
+                </div>
+                <div className="bg-white p-3 rounded-lg shadow-sm">
+                    <div className="font-bold text-blue-600">{activeCount}</div>
+                    <div className="text-sm text-gray-500">Active</div>
+                </div>
+                <div className="bg-white p-3 rounded-lg shadow-sm">
+                    <div className="font-bold text-green-600">{completedCount}</div>
+                    <div className="text-sm text-gray-500">Done</div>
+                </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-                {displayedTodos?.length > 0 ? (displayedTodos?.map((todo) => (
-                    <div className="bg-gray-50" key={todo.id} >
+
+            {/* Controls */}
+            <div className="space-y-3">
+                {/* Search */}
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <input
+                        type="text"
+                        placeholder="Search tasks..."
+                        value={term}
+                        onChange={(e) => setTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                </div>
+
+                {/* Mobile Filters Button */}
+                <div className="flex gap-4">
+                    <button
+                        onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
+                        className="sm:hidden flex items-center gap-2 w-full px-4 py-2 bg-gray-100 rounded-lg"
+                    >
+                        <Filter className="w-4 h-4" />
+                        <span>Filters</span>
+                    </button>
+
+                    <button
+                        disabled={history.length === 0}
+                        onClick={handleUndo}
+                        className="w-full sm:w-auto px-4 py-2 bg-gray-100 rounded-lg flex items-center gap-2 justify-center disabled:opacity-50"
+                    >
+                        <Undo className="w-4 h-4" />
+                        <span>Undo</span>
+                    </button>
+                </div>
+
+                {/* Filters - Desktop */}
+                <div className={`${mobileFiltersOpen ? 'block' : 'hidden'} sm:block space-y-2 sm:space-y-0 sm:flex sm:gap-2`}>
+                    <button
+                        onClick={() => setFilterValue('all')}
+                        className={`w-full sm:w-auto px-4 py-2 rounded-lg ${filterValue === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                    >
+                        All
+                    </button>
+                    <button
+                        onClick={() => setFilterValue('active')}
+                        className={`w-full sm:w-auto px-4 py-2 rounded-lg ${filterValue === 'active' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                    >
+                        Active
+                    </button>
+                    <button
+                        onClick={() => setFilterValue('completed')}
+                        className={`w-full sm:w-auto px-4 py-2 rounded-lg ${filterValue === 'completed' ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}
+                    >
+                        Completed
+                    </button>
+                </div>
+            </div>
+
+            {/* Todo List */}
+            <div className="space-y-2">
+                {displayedTodos?.length > 0 ? (
+                    displayedTodos.map((todo) => (
                         <Todo
+                            key={todo.id}
                             todo={todo}
                             handleToggle={() => handleToggle(todo.id)}
                             handleDelete={() => handleDelete(todo.id)}
@@ -290,20 +336,23 @@ export default function Form({ GetAllTodos }) {
                             handleCancelEdit={handleCancelEdit}
                             handleOnKeyDown={handleOnKeyDown}
                         />
-                    </div>
-                ))
+                    ))
                 ) : (
-                    <p>No Tasks Found</p>
+                    <div className="text-center py-8 text-gray-500">
+                        <p>{term ? 'No tasks match your search' : 'No tasks yet'}</p>
+                    </div>
                 )}
             </div>
-            {todos?.some((todo) => todo.completed) &&
+
+            {/* Clear Completed */}
+            {completedCount > 0 && (
                 <button
                     onClick={handleClearCompleted}
-                    className="px-3 py-1.5 bg-gray-300 text-black rounded transition duration-200 text-sm cursor-pointer"
+                    className="w-full mt-4 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                 >
-                    Clear Completed
+                    Clear Completed ({completedCount})
                 </button>
-            }
-        </>
+            )}
+        </div>
     );
 }
